@@ -1,0 +1,50 @@
+commit ab6e2e158c8b3cbedbd37b871936672542cefeda
+Author: Jussi Maki <jussi@isovalent.com>
+Date:   Fri Nov 12 10:58:19 2021 +0100
+
+    Check for both EINTR and EAGAIN on disconnect
+    
+    In some situations the kernel may return EAGAIN on a
+    socket that is being shut down, so handle it gracefully.
+
+diff --git a/src/nettest_omni.c b/src/nettest_omni.c
+index 5d63f02..d183bb4 100644
+--- a/src/nettest_omni.c
++++ b/src/nettest_omni.c
+@@ -3512,14 +3512,19 @@ disconnect_data_socket(SOCKET data_socket, int initiate, int do_close, struct so
+ 		       0);
+ 
+     if (bytes_recvd != 0) {
+-      /* connection close, call close. we assume that the requisite
+-         number of bytes have been received */
+-      if (SOCKET_EINTR(bytes_recvd))
+-	{
+-	  /* We hit the end of a timed test. */
+-	  return -1;
++	if (SOCKET_EAGAIN(bytes_recvd)) {
++		bytes_recvd = 0;
++	} else {
++
++	      /* connection close, call close. we assume that the requisite
++	         number of bytes have been received */
++	      if (SOCKET_EINTR(bytes_recvd))
++		{
++		  /* We hit the end of a timed test. */
++		  return -1;
++		}
++	      return -3;
+ 	}
+-      return -3;
+     }
+   }
+   else {
+@@ -3538,6 +3543,9 @@ disconnect_data_socket(SOCKET data_socket, int initiate, int do_close, struct so
+ 			   0,
+ 			   0);
+       /* we only really care if the timer expired on us */
++      if (SOCKET_EAGAIN(bytes_recvd))
++		bytes_recvd = 0;
++
+       if (SOCKET_EINTR(bytes_recvd)) {
+ 	if (do_close)
+ 	  close(data_socket);
